@@ -158,6 +158,7 @@ Running on Next.js 16 (Turbopack by default) + React 19.2.
 
 ## Security notes
 
+- **Wallet Requirements & Minimum Version.** The app requires the Freighter browser extension (minimum supported version: `2.0.0`). Extension versions are automatically detected on connection and diagnostics surface a warning if an outdated version is installed.
 - **No custody.** The frontend never holds a private key — every signature happens inside the Freighter extension, in the user's own browser context. `src/lib/wallet.tsx` only ever receives a signed transaction XDR back, never a key.
 - **Read-only degradation, not silent failure.** Without a configured contract id or a reachable backend, the UI runs in an explicit "not configured" / empty state rather than throwing — see [Configuration](#configuration).
 - **Error boundaries.** `error.tsx` (route-segment) and `global-error.tsx` (root-layout-level) catch uncaught render errors and offer a retry instead of the previous behavior, where any single uncaught error anywhere in the tree would take down the entire client-side app with no recovery short of a hard reload.
