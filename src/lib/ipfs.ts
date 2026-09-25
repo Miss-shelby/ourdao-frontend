@@ -8,15 +8,31 @@ const PBKDF2_ITERATIONS = 600000
 // Encryption version marker: increment if algorithm changes to support migrations
 const ENCRYPTION_VERSION = 1
 
-// Encryption utilities
-export async function encryptData(data: string, password: string): Promise<string> {
+// Helper functions for chunked Base64 encoding/decoding without stack overflow
+function bytesToBase64(bytes: Uint8Array): string {
+  let binString = ''
+  for (let i = 0; i < bytes.byteLength; i += 8192) {
+    binString += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  }
+  return btoa(binString)
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binString = atob(base64)
+  const bytes = new Uint8Array(binString.length)
+  for (let i = 0; i < binString.length; i++) {
+    bytes[i] = binString.charCodeAt(i)
+  }
+  return bytes
+}
+
+export async function encryptBytes(data: Uint8Array, password: string): Promise<string> {
   const encoder = new TextEncoder()
 
   // Generate salt and IV
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
 
-  // Derive key from password
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     encoder.encode(password),
@@ -37,66 +53,29 @@ export async function encryptData(data: string, password: string): Promise<strin
     false,
     ['encrypt', 'decrypt']
   )
-  
-  // Encrypt data
+
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: iv },
     key,
-    encoder.encode(data)
+    data as unknown as BufferSource
   )
 
-  // Combine version, salt, iv, and encrypted data into a single blob.
-  // Format: [version:1][iterations:4][salt:16][iv:12][ciphertext:...]
-  // This allows future upgrades to read the parameters back and decrypt
-  // old documents even if the algorithm or iteration count changes.
-  const iterationsBuffer = new Uint32Array([PBKDF2_ITERATIONS])
-  const combined = new Uint8Array(
-    1 + iterationsBuffer.byteLength + salt.length + iv.length + encrypted.byteLength
-  )
-  combined[0] = ENCRYPTION_VERSION
-  combined.set(new Uint8Array(iterationsBuffer.buffer), 1)
-  combined.set(salt, 1 + iterationsBuffer.byteLength)
-  combined.set(iv, 1 + iterationsBuffer.byteLength + salt.length)
-  combined.set(
-    new Uint8Array(encrypted),
-    1 + iterationsBuffer.byteLength + salt.length + iv.length
-  )
+  const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength)
+  combined.set(salt, 0)
+  combined.set(iv, salt.length)
+  combined.set(new Uint8Array(encrypted), salt.length + iv.length)
 
-  return btoa(String.fromCharCode(...combined))
+  return bytesToBase64(combined)
 }
 
-export async function decryptData(encryptedData: string, password: string): Promise<string> {
+export async function decryptBytes(encryptedData: string, password: string): Promise<Uint8Array> {
   const encoder = new TextEncoder()
-  const decoder = new TextDecoder()
+  const combined = base64ToBytes(encryptedData)
 
-  // Decode base64
-  const decoded = atob(encryptedData)
-  const combined = new Uint8Array(decoded.length)
-  for (let i = 0; i < decoded.length; i++) {
-    combined[i] = decoded.charCodeAt(i)
-  }
+  const salt = combined.slice(0, 16)
+  const iv = combined.slice(16, 28)
+  const encrypted = combined.slice(28)
 
-  // Extract components: [version:1][iterations:4][salt:16][iv:12][ciphertext:...]
-  // Supports both old (no version) and new (versioned) formats for backward compatibility.
-  let iterations = 100000 // Old documents used 100k iterations
-  let saltStart = 0
-  let ivStart = 16
-  let encryptedStart = 28
-
-  // Check if this is a new versioned document (has version byte)
-  if (combined.length > 33 && combined[0] <= 1) {
-    const iterationsBuffer = new DataView(combined.buffer, combined.byteOffset + 1, 4)
-    iterations = iterationsBuffer.getUint32(0, true)
-    saltStart = 5
-    ivStart = saltStart + 16
-    encryptedStart = ivStart + 12
-  }
-
-  const salt = combined.slice(saltStart, saltStart + 16)
-  const iv = combined.slice(ivStart, ivStart + 12)
-  const encrypted = combined.slice(encryptedStart)
-
-  // Derive key from password using the stored iteration count
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     encoder.encode(password),
@@ -117,15 +96,24 @@ export async function decryptData(encryptedData: string, password: string): Prom
     false,
     ['encrypt', 'decrypt']
   )
-  
-  // Decrypt data
+
   const decrypted = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: iv },
     key,
     encrypted
   )
-  
-  return decoder.decode(decrypted)
+
+  return new Uint8Array(decrypted)
+}
+
+// Encryption utilities for string data
+export async function encryptData(data: string, password: string): Promise<string> {
+  return encryptBytes(new TextEncoder().encode(data), password)
+}
+
+export async function decryptData(encryptedData: string, password: string): Promise<string> {
+  const decryptedBytes = await decryptBytes(encryptedData, password)
+  return new TextDecoder().decode(decryptedBytes)
 }
 
 // IPFS upload with encryption. Encryption happens here, client-side, before
@@ -136,15 +124,14 @@ export async function uploadToIPFS(
   encrypt: boolean = false,
   password?: string
 ): Promise<{ hash: string; size: number; encrypted: boolean }> {
-  const fileContent = await file.arrayBuffer()
+  const fileContent = new Uint8Array(await file.arrayBuffer())
   let processedData: Uint8Array
 
   if (encrypt && password) {
-    const fileText = new TextDecoder().decode(fileContent)
-    const encryptedText = await encryptData(fileText, password)
+    const encryptedText = await encryptBytes(fileContent, password)
     processedData = new TextEncoder().encode(encryptedText)
   } else {
-    processedData = new Uint8Array(fileContent)
+    processedData = fileContent
   }
 
   // No timeout on this POST: a stalled upload route hangs until the browser gives
@@ -204,9 +191,9 @@ export async function downloadFromIPFS(
 
   if (encrypted && password) {
     const encryptedText = new TextDecoder().decode(fileData)
-    const decryptedText = await decryptData(encryptedText, password)
+    const content = await decryptBytes(encryptedText, password)
     return {
-      content: new TextEncoder().encode(decryptedText),
+      content,
       decrypted: true,
     }
   }
