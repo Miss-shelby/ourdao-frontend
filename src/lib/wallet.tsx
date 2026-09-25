@@ -349,8 +349,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const disconnect = useCallback(() => {
     setAddress(null)
+    // Clear all cached query data so no previous account's data lingers
+    // after disconnect — matches the account-switch behaviour above.
+    queryClient.clear()
     toast('Wallet disconnected')
-  }, [])
+  }, [queryClient])
 
   const signXDR = useCallback(
     async (xdr: string, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<string> => {
