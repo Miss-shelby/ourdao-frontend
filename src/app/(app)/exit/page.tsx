@@ -27,7 +27,10 @@ export default function ExitPage() {
   const myStake = useStake()
   const { exitDao, isPending, isSuccess } = useExitDao()
   const { isPaused } = useDAOStats()
-  const { isResolving } = useRequireMember({ userData })
+  const { isResolving } = useRequireMember({
+    userData,
+    memberRedirect: isSuccess ? null : '/register',
+  })
   useAnnounceLoad('Exit DAO', userData.isLoading, !!userData.isError)
 
   const [confirmed, setConfirmed] = useState(false)
@@ -80,7 +83,7 @@ export default function ExitPage() {
     )
   }
 
-  if (!userData.isMember) {
+  if (!userData.isMember && !isSuccess) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Card className="w-full max-w-md">

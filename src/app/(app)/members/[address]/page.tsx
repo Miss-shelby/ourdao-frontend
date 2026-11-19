@@ -6,7 +6,7 @@ import { useMemberSummary, useMemberActivity, eventLabel } from '@/hooks/useDAO'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatToken, formatDate } from '@/lib/utils'
-import { formatStellarAddress } from '@/lib/stellar'
+import { formatStellarAddress, getAddressUrl } from '@/lib/stellar'
 import {
   User,
   Coins,
@@ -56,14 +56,19 @@ export default function MemberProfilePage() {
                 </p>
               </div>
             </div>
-            <a
-              href={`https://stellar.expert/explorer/testnet/account/${address}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              View on Explorer <ExternalLink className="ml-1 h-3.5 w-3.5" />
-            </a>
+            {(() => {
+              const explorerUrl = getAddressUrl(address)
+              return explorerUrl ? (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  View on Explorer <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                </a>
+              ) : null
+            })()}
           </div>
         </CardContent>
       </Card>

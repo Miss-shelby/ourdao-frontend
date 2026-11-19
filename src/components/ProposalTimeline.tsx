@@ -4,6 +4,7 @@ import { useLoanTimeline, useTreasuryTimeline, eventLabel } from '@/hooks/useDAO
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { CalendarIcon, ExternalLink } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { getTransactionUrl } from '@/lib/stellar'
 
 interface ProposalTimelineProps {
   kind: 'loan' | 'treasury'
@@ -112,16 +113,19 @@ export function ProposalTimeline({ kind, id, isPrivate = false, fallbackDates }:
                   <span className="text-xs text-muted-foreground">
                     {formatDate(ev.created_at)}
                   </span>
-                  {ev.tx_hash && (
-                    <a
-                      href={`https://stellar.expert/explorer/testnet/tx/${ev.tx_hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
-                    >
-                      Tx {ev.tx_hash.slice(0, 8)}... <ExternalLink className="ml-1 h-3 w-3" />
-                    </a>
-                  )}
+                  {(() => {
+                    const txUrl = ev.tx_hash ? getTransactionUrl(ev.tx_hash) : null
+                    return txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                      >
+                        Tx {ev.tx_hash!.slice(0, 8)}... <ExternalLink className="ml-1 h-3 w-3" />
+                      </a>
+                    ) : null
+                  })()}
                 </div>
               </div>
             ))}

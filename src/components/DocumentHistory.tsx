@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { FileText, ExternalLink } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { AddressLink } from '@/components/AddressLink'
+import { IPFS_GATEWAY } from '@/constants'
 
 interface DocumentHistoryProps {
   kind: 'loan' | 'treasury'
@@ -13,7 +14,6 @@ interface DocumentHistoryProps {
 
 export function DocumentHistory({ kind, proposalId }: DocumentHistoryProps) {
   const { history, isLoading, isError } = useDocumentHistory(kind, proposalId)
-  const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || 'https://gateway.pinata.cloud/ipfs/'
 
   if (isLoading) {
     return (
@@ -75,14 +75,18 @@ export function DocumentHistory({ kind, proposalId }: DocumentHistoryProps) {
                     {formatDate(item.created_at)}
                   </td>
                   <td className="py-2.5 text-right">
-                    <a
-                      href={`${gateway}${item.cid}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Open <ExternalLink className="ml-1 h-3 w-3" />
-                    </a>
+                    {IPFS_GATEWAY ? (
+                      <a
+                        href={`${IPFS_GATEWAY}${item.cid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Open <ExternalLink className="ml-1 h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
